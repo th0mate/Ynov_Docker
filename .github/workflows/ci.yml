@@ -33,6 +33,8 @@ jobs:
     name: Build et démarrage des conteneurs
     needs: test
     runs-on: ubuntu-latest
+    env:
+      APP_VERSION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - run: docker compose up -d --build --wait

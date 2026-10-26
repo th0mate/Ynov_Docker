@@ -3,7 +3,7 @@
 Une liste de tâches en trois services Docker indépendants, chacun avec son propre Dockerfile.
 
 ```
-navigateur ──► frontend (Nginx :80) ──/api──► backend (Express :3000) ──► db (PostgreSQL :5432)
+navigateur ──► frontend (Nginx :8080) ──/api──► backend (Express :3000) ──► db (PostgreSQL :5432)
 ```
 
 | Service    | Technologie                    | Dockerfile               |
@@ -68,23 +68,44 @@ docker build --target test ./backend
 docker build --target test ./frontend
 ```
 
-## Déploiement gratuit sur Render
+## Dockerfiles
 
-Le fichier `render.yaml` décrit l'API et le frontend, construits depuis leurs Dockerfiles, ainsi que la base PostgreSQL gérée par Render.
+| Notion | Utilisation dans le projet |
+| --- | --- |
+| Directive `# syntax` | `frontend` : fixe la version du parseur Dockerfile |
+| `ARG` avant `FROM` | Version de Node, Nginx et PostgreSQL, modifiable avec `--build-arg NODE_VERSION=24` |
+| `ARG` dans une étape et `${VAR:-défaut}` | `APP_VERSION` alimente le label de version, `dev` par défaut |
+| Multi-étapes, `FROM … AS` | `base` → `deps` / `test` → `runtime` (backend) ; `build` → `test` / `runtime` (frontend) |
+| `FROM --platform=$BUILDPLATFORM` | Le build Vite tourne en natif : HTML, CSS et JS ne dépendent pas de l'architecture |
+| `COPY` avec motif, ordre des couches | `package*.json` est copié avant le code : `npm ci` reste en cache tant que les dépendances ne changent pas |
+| `COPY --from` | Seuls `node_modules` de production et le `dist` compilé passent dans l'image finale |
+| `COPY --chmod` | `init.sql` en lecture seule dans l'image de la base |
+| `RUN` forme shell et forme exec | `npm ci … && npm cache clean` sur plusieurs lignes ; `RUN ["npm", "run", "coverage"]` |
+| `ENV` | Plusieurs variables par instruction, surchargeables avec `docker run -e` |
+| `LABEL` | Métadonnées OCI (titre, version, source), visibles avec `docker inspect` |
+| `WORKDIR` | Défini explicitement dans chaque étape |
+| `USER` | `node` et `nginx` : les deux services applicatifs tournent sans droits root |
+| `EXPOSE` | Port et protocole documentés (`3000/tcp`, `8080/tcp`, `5432/tcp`) |
+| `VOLUME` | Données PostgreSQL hors du conteneur |
+| `STOPSIGNAL` | Signal d'arrêt propre à chaque processus (`SIGTERM`, `SIGQUIT`, `SIGINT`) |
+| `ENTRYPOINT` + `CMD` | Le backend se comporte comme `node` : `docker run --rm todo-list/backend --version` |
 
-1. Sur [render.com](https://render.com), choisir **New → Blueprint** puis sélectionner ce dépôt.
-2. Render demande une valeur pour `BACKEND_URL`. L'adresse de l'API n'existe pas encore : saisir `https://todo-api.onrender.com` provisoirement.
-3. Une fois `todo-api` déployée, copier son URL réelle (en haut de sa page) dans **todo-front → Environment → `BACKEND_URL`**. Le frontend redémarre tout seul.
+La base n'a pas d'instruction `USER`, car l'entrypoint officiel de PostgreSQL a besoin de root pour préparer le volume, puis lance le serveur sous l'utilisateur `postgres`.
 
-Adaptations faites pour l'hébergement :
+Notions volontairement non utilisées :
 
-- Le backend accepte une `DATABASE_URL` et crée la table au démarrage, car une base hébergée n'exécute pas `init.sql`.
-- Nginx lit son port (`PORT`) et l'adresse de l'API (`BACKEND_URL`) dans l'environnement. Les valeurs par défaut conviennent à `docker compose`.
+- **`ADD`** : `COPY` suffit, puisqu'aucune archive ni URL n'est à intégrer.
+- **`ONBUILD`** : réservé aux images de base destinées à être réutilisées.
+- **`# escape`** : utile surtout pour les Dockerfiles Windows.
+- **Figer une image par digest (`@sha256:…`)** : cela garantit une image identique, mais bloque aussi les correctifs de sécurité publiés sous le même tag.
 
-Limites de l'offre gratuite :
+Pour inspecter les images construites :
 
-- Un service se met en veille après 15 min sans visite, et le premier chargement suivant prend environ une minute.
-- La base gratuite expire après 30 jours. Pour un hébergement durable, créer une base gratuite sur [Neon](https://neon.tech) et mettre son URL dans la variable `DATABASE_URL` de `todo-api`.
+```bash
+APP_VERSION=1.0.0 docker compose build
+docker history todo-list/backend:1.0.0    # une couche par instruction
+docker inspect todo-list/backend:1.0.0 --format '{{json .Config.Labels}}'
+```
 
 ## Développement sans Docker
 

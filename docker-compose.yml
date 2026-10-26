@@ -1,8 +1,14 @@
 name: todo-list
 
+x-build-args: &build-args
+  APP_VERSION: ${APP_VERSION:-dev}
+
 services:
   db:
-    build: ./database
+    image: todo-list/db:${APP_VERSION:-dev}
+    build:
+      context: ./database
+      args: *build-args
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-todo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-todo}
@@ -12,11 +18,12 @@ services:
     restart: unless-stopped
 
   backend:
+    image: todo-list/backend:${APP_VERSION:-dev}
     build:
       context: ./backend
       target: runtime
+      args: *build-args
     environment:
-      PORT: 3000
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: ${POSTGRES_USER:-todo}
@@ -28,11 +35,13 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: todo-list/frontend:${APP_VERSION:-dev}
     build:
       context: ./frontend
       target: runtime
+      args: *build-args
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "${FRONTEND_PORT:-8080}:8080"
     depends_on:
       backend:
         condition: service_healthy
