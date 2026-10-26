@@ -1,9 +1,18 @@
 import { createApp } from './app.js';
-import { config } from './config.js';
+import { loadConfig } from './config.js';
 import { createPool } from './db.js';
 import { createTodoRepository } from './repositories/todoRepository.js';
+import { ensureSchema } from './schema.js';
 
+const config = loadConfig();
 const pool = createPool(config.db);
+
+try {
+  await ensureSchema(pool);
+} catch (err) {
+  console.error('Impossible d’initialiser la base de données :', err.message);
+  process.exit(1);
+}
 
 const app = createApp({
   todoRepository: createTodoRepository(pool),

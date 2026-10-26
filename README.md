@@ -68,6 +68,24 @@ docker build --target test ./backend
 docker build --target test ./frontend
 ```
 
+## Déploiement gratuit sur Render
+
+Le fichier `render.yaml` décrit l'API et le frontend, construits depuis leurs Dockerfiles, ainsi que la base PostgreSQL gérée par Render.
+
+1. Sur [render.com](https://render.com), choisir **New → Blueprint** puis sélectionner ce dépôt.
+2. Render demande une valeur pour `BACKEND_URL`. L'adresse de l'API n'existe pas encore : saisir `https://todo-api.onrender.com` provisoirement.
+3. Une fois `todo-api` déployée, copier son URL réelle (en haut de sa page) dans **todo-front → Environment → `BACKEND_URL`**. Le frontend redémarre tout seul.
+
+Adaptations faites pour l'hébergement :
+
+- Le backend accepte une `DATABASE_URL` et crée la table au démarrage, car une base hébergée n'exécute pas `init.sql`.
+- Nginx lit son port (`PORT`) et l'adresse de l'API (`BACKEND_URL`) dans l'environnement. Les valeurs par défaut conviennent à `docker compose`.
+
+Limites de l'offre gratuite :
+
+- Un service se met en veille après 15 min sans visite, et le premier chargement suivant prend environ une minute.
+- La base gratuite expire après 30 jours. Pour un hébergement durable, créer une base gratuite sur [Neon](https://neon.tech) et mettre son URL dans la variable `DATABASE_URL` de `todo-api`.
+
 ## Développement sans Docker
 
 ```bash
@@ -96,10 +114,12 @@ frontend/
     components/                    TodoComposer, TodoItem, TodoFilters
     App.vue, style.css
   tests/
-  nginx.conf
+  nginx.conf.template            config Nginx (port et URL de l'API injectés au démarrage)
 database/
   init.sql
 docker-compose.yml
+render.yaml                      déploiement Render (Blueprint)
+.github/workflows/ci.yml         tests et build Docker à chaque push
 ```
 
 ## Utilisation

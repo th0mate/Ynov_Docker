@@ -8,7 +8,7 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.js'],
       // Points d'entrée liés à l'infrastructure, couverts par les tests de bout en bout
-      exclude: ['src/server.js', 'src/db.js', 'src/config.js'],
+      exclude: ['src/server.js', 'src/db.js'],
       thresholds: { lines: 90, functions: 90, branches: 85, statements: 90 },
     },
   },

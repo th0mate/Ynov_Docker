@@ -1,13 +1,16 @@
+# Modèle traité au démarrage par l'image nginx officielle : ${PORT} et ${BACKEND_URL} sont remplacés
 server {
-  listen 80;
+  listen ${PORT};
   server_name _;
   root /usr/share/nginx/html;
   index index.html;
 
   # Le navigateur appelle la même origine : pas besoin de CORS côté backend
   location /api/ {
-    proxy_pass http://backend:3000;
-    proxy_set_header Host $host;
+    proxy_pass ${BACKEND_URL};
+    # Nécessaire quand le backend est en HTTPS (Render) : SNI et en-tête Host du backend
+    proxy_ssl_server_name on;
+    proxy_set_header Host $proxy_host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   }
 

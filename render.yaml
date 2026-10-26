@@ -1,0 +1,37 @@
+# Blueprint Render : crée l'API, le frontend et la base en une fois (offre gratuite)
+# Tous les services sont dans la même région pour que l'API joigne la base en interne.
+services:
+  - type: web
+    name: todo-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: todo-db
+          property: connectionString
+
+  - type: web
+    name: todo-front
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      # URL publique de l'API, demandée à la création (ex. https://todo-api-xxxx.onrender.com)
+      - key: BACKEND_URL
+        sync: false
+
+databases:
+  - name: todo-db
+    plan: free
+    region: frankfurt
+    databaseName: todo
+    user: todo
