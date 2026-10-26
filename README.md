@@ -1,0 +1,109 @@
+# Todo list : Vue, Express, PostgreSQL et Docker
+
+Une liste de tâches en trois services Docker indépendants, chacun avec son propre Dockerfile.
+
+```
+navigateur ──► frontend (Nginx :80) ──/api──► backend (Express :3000) ──► db (PostgreSQL :5432)
+```
+
+| Service    | Technologie                    | Dockerfile               |
+| ---------- | ------------------------------ | ------------------------ |
+| `frontend` | Vue 3, TypeScript, Vite, Nginx | `frontend/Dockerfile`    |
+| `backend`  | Node 22, Express 5, `pg`       | `backend/Dockerfile`     |
+| `db`       | PostgreSQL 17                  | `database/Dockerfile`    |
+
+Nginx sert l'application et relaie `/api` vers le backend. Le navigateur ne parle donc qu'à une seule origine, sans configuration CORS.
+
+## Lancer le projet
+
+```bash
+cp .env.example .env        # facultatif : identifiants et port
+docker compose up -d --build
+```
+
+L'application est disponible sur <http://localhost:8080>.
+
+Les services démarrent dans l'ordre grâce aux healthchecks : le backend attend que PostgreSQL soit prêt, puis le frontend attend que l'API réponde.
+
+```bash
+docker compose ps              # état et santé des conteneurs
+docker compose logs -f backend # logs d'un service
+docker compose down            # arrêt (les données sont conservées)
+docker compose down -v         # arrêt et suppression du volume de la base
+```
+
+Le script `database/init.sql` n'est exécuté qu'à la création du volume. Après une modification du schéma, lancez `docker compose down -v`.
+
+## API
+
+| Méthode  | Route                  | Description                           |
+| -------- | ---------------------- | ------------------------------------- |
+| `GET`    | `/api/health`          | État de l'API et de la base           |
+| `GET`    | `/api/todos`           | Liste des tâches, les récentes d'abord |
+| `POST`   | `/api/todos`           | Crée une tâche : `{ "title": "…" }`   |
+| `PATCH`  | `/api/todos/:id`       | Modifie `title` et/ou `completed`     |
+| `DELETE` | `/api/todos/:id`       | Supprime une tâche                    |
+| `DELETE` | `/api/todos/completed` | Supprime toutes les tâches terminées  |
+
+Les erreurs sont renvoyées au format `{ "error": "message" }` avec le code HTTP adapté (400, 404, 500).
+
+## Tests et couverture
+
+Les deux projets utilisent [Vitest](https://vitest.dev). La couverture est mesurée avec V8, et un seuil minimal fait échouer la commande s'il n'est pas atteint.
+
+```bash
+cd backend && npm install && npm run coverage
+cd frontend && npm install && npm run coverage
+```
+
+Le rapport HTML est généré dans `coverage/index.html`.
+
+- **Backend** : validation des entrées, repository (avec un pool PostgreSQL simulé) et routes HTTP via Supertest. L'application reçoit ses dépendances (`createApp({ todoRepository, checkDatabase })`), ce qui permet de la tester avec un repository en mémoire, sans base de données.
+- **Frontend** : client HTTP (avec `fetch` simulé), composable `useTodos` (dont les retours arrière après une erreur de l'API) et composants avec Vue Test Utils.
+
+Les tests peuvent aussi tourner dans Docker, grâce à l'étape `test` des Dockerfiles :
+
+```bash
+docker build --target test ./backend
+docker build --target test ./frontend
+```
+
+## Développement sans Docker
+
+```bash
+docker compose up -d db                         # seulement la base
+cd backend && npm run dev                       # API sur :3000
+cd frontend && npm run dev                      # Vite sur :5173, relaie /api vers :3000
+```
+
+En local, le backend lit `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` et `DB_NAME` (par défaut `localhost:5432`, `todo`/`todo`). Pour qu'il atteigne la base, exposez le port 5432 en ajoutant `ports: ["5432:5432"]` au service `db`.
+
+## Structure
+
+```
+backend/
+  src/
+    app.js                         application Express (dépendances injectées)
+    server.js                      point d'entrée, arrêt propre sur SIGTERM
+    validation.js, errors.js
+    routes/todos.js
+    repositories/todoRepository.js requêtes SQL paramétrées
+  tests/
+frontend/
+  src/
+    api/todos.ts                   client HTTP typé
+    composables/useTodos.ts        état et mises à jour optimistes
+    components/                    TodoComposer, TodoItem, TodoFilters
+    App.vue, style.css
+  tests/
+  nginx.conf
+database/
+  init.sql
+docker-compose.yml
+```
+
+## Utilisation
+
+- Entrée ajoute une tâche.
+- Un double-clic sur une tâche (ou l'icône crayon) permet de la renommer : Entrée valide, Échap annule.
+- Le titre de la page indique combien de tâches il reste.
